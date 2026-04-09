@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /statera/
+Disallow: /statera/node_modules/
+Disallow: /statera/src/
+Sitemap: https://umairhex.github.io/statera/sitemap.xml
