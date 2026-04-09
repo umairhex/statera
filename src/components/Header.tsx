@@ -1,19 +1,21 @@
 import { Sun, Moon, Github } from 'lucide-react';
 
-/**
- * Logo component that displays the appropriate logo based on theme
- * Uses black logo for light mode and white logo for dark mode
- */
-const Logo = ({ isDarkMode }: { isDarkMode: boolean }) => (
-  <img
-    src={isDarkMode ? '/logos/statera-white-logo.svg' : '/logos/statera-black-logo.svg'}
-    alt="Statera Logo"
-    width="32"
-    height="32"
-    aria-hidden="true"
-    className="shrink-0 transition-opacity duration-200"
-  />
-);
+const Logo = ({ isDarkMode }: { isDarkMode: boolean }) => {
+  const logoPath = isDarkMode
+    ? `${import.meta.env.BASE_URL}logos/statera-white-logo.svg`
+    : `${import.meta.env.BASE_URL}logos/statera-black-logo.svg`;
+
+  return (
+    <img
+      src={logoPath}
+      alt="Statera Logo"
+      width="32"
+      height="32"
+      aria-hidden="true"
+      className="shrink-0 transition-opacity duration-200"
+    />
+  );
+};
 
 interface HeaderProps {
   isDarkMode: boolean;
