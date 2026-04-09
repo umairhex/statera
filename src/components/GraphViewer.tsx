@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   ReactFlow,
   useNodesState,
@@ -10,10 +10,12 @@ import {
   Panel,
   useReactFlow,
   ReactFlowProvider,
+  Position,
   Node,
   Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import ELK from 'elkjs/lib/elk.bundled.js';
 import dagre from 'dagre';
 import { toPng } from 'html-to-image';
 import {
@@ -25,6 +27,7 @@ import {
   Zap,
   Info,
   Loader,
+  Wand2,
 } from 'lucide-react';
 import { Automaton } from '../lib/automata';
 import { CustomEdge } from './CustomEdge';
@@ -33,47 +36,118 @@ const edgeTypes = {
   custom: CustomEdge,
 };
 
+const elk = new ELK();
+
+async function getElkLayoutedElements(
+  nodes: Node[],
+  edges: Edge[]
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const elkGraph = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': 'RIGHT',
+      
+      'elk.layered.spacing.nodeNodeBetweenLayers': '140',
+      'elk.spacing.nodeNode': '90',
+      
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      
+      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+      
+      'elk.edgeRouting': 'SPLINES',
+      
+      'elk.layered.cycleBreaking.strategy': 'GREEDY',
+      
+      'elk.layered.compaction.postCompaction.strategy': 'LEFT_RIGHT_CONSTRAINT_LOCKING',
+      
+      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+      
+      'elk.padding': '[top=40,left=40,bottom=40,right=40]',
+    },
+    children: nodes.map((n) => ({
+      id: n.id,
+      width: (n.style?.width as number) || 60,
+      height: (n.style?.height as number) || 60,
+    })),
+    edges: edges.map((e) => ({
+      id: e.id,
+      sources: [e.source],
+      targets: [e.target],
+    })),
+  };
+
+  const laid = await elk.layout(elkGraph);
+
+  const newNodes = nodes.map((n) => {
+    const elkNode = laid.children?.find((c) => c.id === n.id);
+    if (!elkNode) return n;
+    return {
+      ...n,
+      position: {
+        x: (elkNode.x ?? 0) - ((n.style?.width as number) || 60) / 2,
+        y: (elkNode.y ?? 0) - ((n.style?.height as number) || 60) / 2,
+      },
+    };
+  });
+
+  return { nodes: newNodes, edges };
+}
+
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-const nodeWidth = 80;
-const nodeHeight = 80;
+const NODE_W = 80;
+const NODE_H = 80;
+
+const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => {
+  dagreGraph.setGraph({
+    rankdir: direction,
+    nodesep: 80,
+    ranksep: 140,
+    acyclicer: 'greedy',
+    ranker: 'network-simplex',
+  });
+
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: NODE_W, height: NODE_H });
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  const newNodes = nodes.map((node) => {
+    const pos = dagreGraph.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: pos.x - NODE_W / 2,
+        y: pos.y - NODE_H / 2,
+      },
+    };
+  });
+
+  return { nodes: newNodes, edges };
+};
 
 const isDeadState = (stateId: string, acceptStates: string[], transitions: any[]): boolean => {
   if (acceptStates.includes(stateId)) return false;
   const visited = new Set<string>();
   const queue = [stateId];
-  
+
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (acceptStates.includes(current)) return false;
     if (visited.has(current)) continue;
     visited.add(current);
-    
-    const reachable = transitions
-      .filter(t => t.from === current)
-      .map(t => t.to)
-      .filter(to => !visited.has(to));
-    queue.push(...reachable);
-  }
-  return true;
-};
 
-const isStateUnreachable = (stateId: string, startState: string, transitions: any[]): boolean => {
-  if (stateId === startState) return false;
-  const visited = new Set<string>();
-  const queue = [startState];
-  
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    if (current === stateId) return false;
-    if (visited.has(current)) continue;
-    visited.add(current);
-    
     const reachable = transitions
-      .filter(t => t.from === current)
-      .map(t => t.to)
-      .filter(to => !visited.has(to));
+      .filter((t) => t.from === current)
+      .map((t) => t.to)
+      .filter((to) => !visited.has(to));
     queue.push(...reachable);
   }
   return true;
@@ -87,38 +161,31 @@ const getStateStyle = (
   isDead: boolean,
   isDarkMode: boolean
 ) => {
- 
   let bgColor: string;
   let borderColor: string;
   let textColor: string;
 
   if (isDead) {
-   
     bgColor = isDarkMode ? '#7f1d1d' : '#ffe4e6';
     borderColor = isDarkMode ? '#dc2626' : '#fb7185';
     textColor = isDarkMode ? '#fca5ac' : '#be123c';
   } else if (isActive) {
-   
     bgColor = isDarkMode ? '#ca8a04' : '#fef08a';
     borderColor = '#ca8a04';
     textColor = isDarkMode ? '#fff' : '#000';
   } else if (isStartState && isAccepting) {
-   
     bgColor = isDarkMode ? '#0d9488' : '#ccfbf1';
     borderColor = isDarkMode ? '#14b8a6' : '#06b6d4';
     textColor = isDarkMode ? '#fff' : '#000';
   } else if (isStartState) {
-   
     bgColor = isDarkMode ? '#0c4a6e' : '#dbeafe';
     borderColor = isDarkMode ? '#0284c7' : '#0284c7';
     textColor = isDarkMode ? '#fff' : '#000';
   } else if (isAccepting) {
-   
     bgColor = isDarkMode ? '#6d28d9' : '#f3e8ff';
     borderColor = isDarkMode ? '#a78bfa' : '#a78bfa';
     textColor = isDarkMode ? '#fff' : '#000';
   } else {
-   
     bgColor = isDarkMode ? '#1f2937' : '#fff';
     borderColor = isDarkMode ? '#4b5563' : '#d1d5db';
     textColor = isDarkMode ? '#e5e7eb' : '#000';
@@ -129,36 +196,8 @@ const getStateStyle = (
     borderColor,
     textColor,
     borderWidth: isAccepting ? 3 : 2,
-    borderStyle: isAccepting ? 'solid' : 'solid',
+    borderStyle: 'solid' as const,
   };
-};
-
-const getLayoutedElements = (nodes: any[], edges: any[], direction = 'LR') => {
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 });
-
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-  });
-
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
-
-  dagre.layout(dagreGraph);
-
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const newNode = {
-      ...node,
-      position: {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - nodeHeight / 2,
-      },
-    };
-    return newNode;
-  });
-
-  return { nodes: newNodes, edges };
 };
 
 function GraphViewerInner({
@@ -175,20 +214,16 @@ function GraphViewerInner({
   const [exportingPng, setExportingPng] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(1);
-  const { zoomIn, zoomOut, getZoom } = useReactFlow();
+  const [isPrettifying, setIsPrettifying] = useState(false);
+  const [prettifySuccess, setPrettifySuccess] = useState(false);
+  const { zoomIn, zoomOut, getZoom, fitView } = useReactFlow();
 
   useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'class') {
-          setIsDarkMode(document.documentElement.classList.contains('dark'));
-        }
-      });
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
     });
-
     observer.observe(document.documentElement, { attributes: true });
     setIsDarkMode(document.documentElement.classList.contains('dark'));
-
     return () => observer.disconnect();
   }, []);
 
@@ -199,23 +234,16 @@ function GraphViewerInner({
       return;
     }
 
-    const initialNodes: any[] = automaton.states.map((state) => {
+    const initialNodes: Node[] = automaton.states.map((state) => {
       const isActive = activeStates.includes(state.id);
       const isStart = state.id === automaton.startState;
       const isDead = isDeadState(state.id, automaton.acceptStates, automaton.transitions);
-      
-      const styling = getStateStyle(
-        state.id,
-        isStart,
-        state.isAccepting,
-        isActive,
-        isDead,
-        isDarkMode
-      );
+
+      const styling = getStateStyle(state.id, isStart, state.isAccepting, isActive, isDead, isDarkMode);
 
       return {
         id: state.id,
-        data: { 
+        data: {
           label: state.id,
           isStart,
           isAccepting: state.isAccepting,
@@ -237,13 +265,12 @@ function GraphViewerInner({
           color: styling.textColor,
           fontWeight: 'bold',
           fontSize: '13px',
-          boxShadow:
-            '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
           transition: 'all 200ms ease-in-out',
           cursor: 'grab',
         },
-        sourcePosition: 'right',
-        targetPosition: 'left',
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
       };
     });
 
@@ -266,54 +293,59 @@ function GraphViewerInner({
         borderRadius: '4px',
         backdropFilter: 'blur(4px)',
       },
-      sourcePosition: 'right',
-      targetPosition: 'left',
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
     });
 
-    const edgeMap = new Map();
+    const edgeMap = new Map<string, string[]>();
     automaton.transitions.forEach((t) => {
       const key = `${t.from}-${t.to}`;
       if (!edgeMap.has(key)) edgeMap.set(key, []);
       edgeMap.get(key)!.push(t.symbol);
     });
 
-    const initialEdges: any[] = Array.from(edgeMap.entries()).map(
-      (entry: any, index: number) => {
-        const [key, symbols] = entry as [string, string[]];
-        const [source, target] = key.split('-');
-        const isSelfLoop = source === target;
-        const isBidirectional =
-          !isSelfLoop && edgeMap.has(`${target}-${source}`);
-        const labelText = symbols.join(', ');
+    const initialEdges: Edge[] = Array.from(edgeMap.entries()).map(([key, symbols], index) => {
+      const [source, target] = key.split('-');
+      const isSelfLoop = source === target;
+      const isBidirectional = !isSelfLoop && edgeMap.has(`${target}-${source}`);
+      const labelText = symbols.join(', ');
 
-        return {
-          id: `e${index}`,
-          source,
-          target,
-          label: labelText,
-          data: { isSelfLoop, isBidirectional, symbols },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: isDarkMode ? '#e5e7eb' : '#000',
-          },
-          style: {
-            stroke: isDarkMode ? '#e5e7eb' : '#000',
-            strokeWidth: 2,
-            textAlign: 'center',
-          },
-          labelStyle: {
-            backgroundColor: isDarkMode ? '#1f2937' : '#fff',
-            color: isDarkMode ? '#e5e7eb' : '#000',
-            fontSize: '12px',
-            fontWeight: 500,
-            padding: '2px 4px',
-            borderRadius: '4px',
-            border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-          },
-          type: 'custom',
-        };
-      }
-    );
+      return {
+        id: `e${index}`,
+        source,
+        target,
+        label: labelText,
+        data: {
+          isSelfLoop,
+          isBidirectional,
+          symbols,
+          
+          cp1OffsetX: 0,
+          cp1OffsetY: 0,
+          cp2OffsetX: 0,
+          cp2OffsetY: 0,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: isDarkMode ? '#e5e7eb' : '#000',
+        },
+        style: {
+          stroke: isDarkMode ? '#e5e7eb' : '#000',
+          strokeWidth: 2,
+          textAlign: 'center',
+        },
+        labelStyle: {
+          backgroundColor: isDarkMode ? '#1f2937' : '#fff',
+          color: isDarkMode ? '#e5e7eb' : '#000',
+          fontSize: '12px',
+          fontWeight: 500,
+          padding: '2px 4px',
+          borderRadius: '4px',
+          border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+        },
+        type: 'custom',
+      };
+    });
 
     initialEdges.push({
       id: 'e-start',
@@ -338,8 +370,8 @@ function GraphViewerInner({
   }, [automaton, isDarkMode]);
 
   useEffect(() => {
-    setNodes((nds: any[]) =>
-      nds.map((n: any) => {
+    setNodes((nds) =>
+      nds.map((n) => {
         if (n.id === 'start-dummy') {
           return {
             ...n,
@@ -355,17 +387,9 @@ function GraphViewerInner({
         const stateData = automaton.states.find((s) => s.id === n.id);
         if (!stateData) return n;
 
-        const isStart = n.data.isStart;
+        const isStart = n.data.isStart as boolean;
         const isDead = isDeadState(n.id, automaton.acceptStates, automaton.transitions);
-        
-        const styling = getStateStyle(
-          n.id,
-          isStart,
-          stateData.isAccepting,
-          isActive,
-          isDead,
-          isDarkMode
-        );
+        const styling = getStateStyle(n.id, isStart, stateData.isAccepting, isActive, isDead, isDarkMode);
 
         return {
           ...n,
@@ -394,32 +418,65 @@ function GraphViewerInner({
         };
       })
     );
-    setEdges((eds: any[]) =>
-      eds.map((e: any) => {
-        return {
-          ...e,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: isDarkMode ? '#e5e7eb' : '#000',
-          },
-          style: {
-            stroke: isDarkMode ? '#e5e7eb' : '#000',
-            strokeWidth: 2,
-            transition: 'all 200ms ease-in-out',
-          },
-          labelStyle: {
-            backgroundColor: isDarkMode ? '#1f2937' : '#fff',
-            color: isDarkMode ? '#e5e7eb' : '#000',
-            fontSize: '12px',
-            fontWeight: 500,
-            padding: '2px 4px',
-            borderRadius: '4px',
-            border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
-          },
-        };
-      })
+    setEdges((eds) =>
+      eds.map((e) => ({
+        ...e,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: isDarkMode ? '#e5e7eb' : '#000',
+        },
+        style: {
+          stroke: isDarkMode ? '#e5e7eb' : '#000',
+          strokeWidth: 2,
+          transition: 'all 200ms ease-in-out',
+        },
+        labelStyle: {
+          backgroundColor: isDarkMode ? '#1f2937' : '#fff',
+          color: isDarkMode ? '#e5e7eb' : '#000',
+          fontSize: '12px',
+          fontWeight: 500,
+          padding: '2px 4px',
+          borderRadius: '4px',
+          border: `1px solid ${isDarkMode ? '#4b5563' : '#d1d5db'}`,
+        },
+      }))
     );
   }, [activeStates, automaton, isDarkMode]);
+
+  const onAutoPrettify = useCallback(async () => {
+    if (isPrettifying || nodes.length === 0) return;
+    setIsPrettifying(true);
+
+    try {
+      
+      const cleanEdges = edges.map((e) => ({
+        ...e,
+        data: {
+          ...e.data,
+          cp1OffsetX: 0,
+          cp1OffsetY: 0,
+          cp2OffsetX: 0,
+          cp2OffsetY: 0,
+        },
+      }));
+
+      const { nodes: prettifiedNodes } = await getElkLayoutedElements(nodes, cleanEdges);
+
+      setNodes(prettifiedNodes);
+      setEdges(cleanEdges);
+
+      setTimeout(() => {
+        fitView({ padding: 0.15, duration: 600 });
+      }, 50);
+
+      setPrettifySuccess(true);
+      setTimeout(() => setPrettifySuccess(false), 2500);
+    } catch (err) {
+      console.error('ELK layout failed:', err);
+    } finally {
+      setIsPrettifying(false);
+    }
+  }, [nodes, edges, isPrettifying, fitView, setNodes, setEdges]);
 
   const onDownload = async () => {
     setExportingPng(true);
@@ -444,8 +501,7 @@ function GraphViewerInner({
   const onExportJson = () => {
     try {
       const dataStr =
-        'data:text/json;charset=utf-8,' +
-        encodeURIComponent(JSON.stringify(automaton, null, 2));
+        'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(automaton, null, 2));
       const a = document.createElement('a');
       a.href = dataStr;
       a.download = 'automaton.json';
@@ -457,26 +513,21 @@ function GraphViewerInner({
     }
   };
 
-    const SymbolLegend = () => {
+  const SymbolLegend = () => {
     const symbolsSet = new Set<string>();
     edges.forEach((edge) => {
       if (edge.data?.symbols) {
         (edge.data.symbols as string[]).forEach((s) => symbolsSet.add(s));
       }
     });
-    
+
     const symbols = Array.from(symbolsSet).sort();
     if (symbols.length === 0) return null;
-    
-   
+
     const getSymbolColor = (symbol: string, isDark: boolean): string => {
-      const colors = isDark ? [
-        '#60a5fa', '#34d399', '#fbbf24', '#f87171',
-        '#a78bfa', '#06b6d4', '#fb923c', '#ec4899',
-      ] : [
-        '#2563eb', '#059669', '#d97706', '#dc2626',
-        '#7c3aed', '#0891b2', '#ea580c', '#db2777',
-      ];
+      const colors = isDark
+        ? ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#06b6d4', '#fb923c', '#ec4899']
+        : ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#ea580c', '#db2777'];
       let hash = 0;
       for (let i = 0; i < symbol.length; i++) {
         hash = ((hash << 5) - hash) + symbol.charCodeAt(i);
@@ -484,7 +535,7 @@ function GraphViewerInner({
       }
       return colors[Math.abs(hash) % colors.length];
     };
-    
+
     return (
       <div className="flex gap-3 flex-wrap">
         {symbols.map((symbol) => (
@@ -501,9 +552,7 @@ function GraphViewerInner({
     );
   };
 
-  
-
-    const StatsPanel = () => {
+  const StatsPanel = () => {
     if (!automaton || automaton.states.length === 0) return null;
     const transitionCount = automaton.transitions.length;
     const acceptingCount = automaton.states.filter((s) => s.isAccepting).length;
@@ -534,9 +583,7 @@ function GraphViewerInner({
   };
 
   return (
-    <div
-      style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
-    >
+    <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}>
       {(!automaton || automaton.states.length === 0) && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-sm pointer-events-none">
           <div className="text-center space-y-2">
@@ -544,12 +591,12 @@ function GraphViewerInner({
               No automaton generated
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Enter a valid regular expression to visualize
+              Enter a valid regular expression to visualise
             </p>
           </div>
         </div>
       )}
-     
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -564,48 +611,32 @@ function GraphViewerInner({
         minZoom={0.1}
         maxZoom={4}
       >
-        <Background
-          color={isDarkMode ? '#374151' : '#e5e7eb'}
-          gap={16}
-          size={1}
-        />
-        <Controls
-          showInteractive={false}
-          className={isDarkMode ? 'dark-controls' : ''}
-        />
+        <Background color={isDarkMode ? '#374151' : '#e5e7eb'} gap={16} size={1} />
+        <Controls showInteractive={false} className={isDarkMode ? 'dark-controls' : ''} />
+
         {showMinimap && (
           <MiniMap
             zoomable
             pannable
-            nodeColor={(n: any) => {
-              if (n.id === 'start-dummy') {
-                return '#0284c7';
-              }
+            nodeColor={(n) => {
+              if (n.id === 'start-dummy') return '#0284c7';
               const state = automaton.states.find((s) => s.id === n.id);
               const isDead = isDeadState(n.id, automaton.acceptStates, automaton.transitions);
-              
-              if (isDead) {
-                return isDarkMode ? '#dc2626' : '#fb7185';
-              }
-              if (n.id === automaton.startState && state?.isAccepting) {
+              if (isDead) return isDarkMode ? '#dc2626' : '#fb7185';
+              if (n.id === automaton.startState && state?.isAccepting)
                 return isDarkMode ? '#0d9488' : '#ccfbf1';
-              }
-              if (n.id === automaton.startState) {
-                return isDarkMode ? '#0c4a6e' : '#dbeafe';
-              }
-              if (state?.isAccepting) {
-                return isDarkMode ? '#6d28d9' : '#f3e8ff';
-              }
+              if (n.id === automaton.startState) return isDarkMode ? '#0c4a6e' : '#dbeafe';
+              if (state?.isAccepting) return isDarkMode ? '#6d28d9' : '#f3e8ff';
               return isDarkMode ? '#1f2937' : '#fff';
             }}
-            maskColor={
-              isDarkMode ? 'rgba(17, 24, 39, 0.7)' : 'rgba(240, 240, 240, 0.6)'
-            }
-            style={{ 
+            maskColor={isDarkMode ? 'rgba(17, 24, 39, 0.7)' : 'rgba(240, 240, 240, 0.6)'}
+            style={{
               backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
               border: `2px solid ${isDarkMode ? '#334155' : '#e2e8f0'}`,
               borderRadius: '6px',
-              boxShadow: isDarkMode ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 2px 8px rgba(0, 0, 0, 0.1)'
+              boxShadow: isDarkMode
+                ? '0 4px 12px rgba(0, 0, 0, 0.4)'
+                : '0 2px 8px rgba(0, 0, 0, 0.1)',
             }}
           />
         )}
@@ -619,20 +650,52 @@ function GraphViewerInner({
               title={showMinimap ? 'Hide Minimap (M)' : 'Show Minimap (M)'}
             >
               <MapIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">
-                {showMinimap ? 'Hide' : 'Show'} Map
-              </span>
+              <span className="hidden sm:inline">{showMinimap ? 'Hide' : 'Show'} Map</span>
             </button>
           </div>
 
           <StatsPanel />
         </Panel>
 
-        <Panel position="top-right" className="flex gap-2">
+        <Panel position="top-right" className="flex gap-2 items-center">
+          
           <div className="px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
             <Zap className="w-3 h-3" />
             {(currentZoom * 100).toFixed(0)}%
           </div>
+
+          <button
+            id="auto-prettify-btn"
+            onClick={onAutoPrettify}
+            disabled={isPrettifying || nodes.length === 0}
+            aria-label="Auto-Prettify Layout (ELK)"
+            title="Auto-Prettify – re-layout using Eclipse Layout Kernel (ELK) to eliminate overlapping arrows"
+            className={[
+              'flex items-center gap-1.5 px-3 py-2 rounded shadow-sm text-xs font-semibold transition-all duration-200',
+              'focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+              prettifySuccess
+                ? 'bg-emerald-500 dark:bg-emerald-600 text-white border border-emerald-400'
+                : 'bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white border border-violet-500 hover:shadow-violet-500/30 hover:shadow-md',
+            ].join(' ')}
+          >
+            {isPrettifying ? (
+              <>
+                <Loader className="w-3.5 h-3.5 animate-spin" />
+                <span className="hidden sm:inline">Prettifying…</span>
+              </>
+            ) : prettifySuccess ? (
+              <>
+                <span className="text-base leading-none">✓</span>
+                <span className="hidden sm:inline">Done!</span>
+              </>
+            ) : (
+              <>
+                <Wand2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Auto-Prettify</span>
+              </>
+            )}
+          </button>
 
           <div className="flex gap-2">
             <button
@@ -645,9 +708,7 @@ function GraphViewerInner({
               {exportingPng ? (
                 <Loader className="w-4 h-4 text-gray-700 dark:text-gray-300 animate-spin" />
               ) : exportSuccess ? (
-                <span className="text-green-600 dark:text-green-400 font-bold">
-                  ✓
-                </span>
+                <span className="text-green-600 dark:text-green-400 font-bold">✓</span>
               ) : (
                 <Download className="w-4 h-4 text-gray-700 dark:text-gray-300" />
               )}
@@ -659,9 +720,7 @@ function GraphViewerInner({
               title="Export JSON"
             >
               {exportSuccess ? (
-                <span className="text-green-600 dark:text-green-400 font-bold">
-                  ✓
-                </span>
+                <span className="text-green-600 dark:text-green-400 font-bold">✓</span>
               ) : (
                 <FileJson className="w-4 h-4 text-gray-700 dark:text-gray-300" />
               )}
@@ -669,8 +728,13 @@ function GraphViewerInner({
           </div>
         </Panel>
 
-        <Panel position="bottom-center" className="flex gap-2 bg-white/90 dark:bg-gray-900/90 px-4 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 backdrop-blur-sm">
-          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap pt-0.5">Symbols:</span>
+        <Panel
+          position="bottom-center"
+          className="flex gap-2 bg-white/90 dark:bg-gray-900/90 px-4 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 backdrop-blur-sm"
+        >
+          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap pt-0.5">
+            Symbols:
+          </span>
           <SymbolLegend />
         </Panel>
       </ReactFlow>
