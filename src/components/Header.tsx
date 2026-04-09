@@ -58,26 +58,7 @@ export function Header({
           </a>
         </div>
       </div>
-      <nav className="px-6 pb-2 flex gap-4 overflow-x-auto scrollbar-hide text-sm font-medium">
-        <a
-          href="#input-section"
-          className={`pb-2 border-b-2 transition-colors whitespace-nowrap ${activeSection === 'input-section' ? 'border-black dark:border-white text-black dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
-        >
-          Input
-        </a>
-        <a
-          href="#automata-section"
-          className={`pb-2 border-b-2 transition-colors whitespace-nowrap ${activeSection === 'automata-section' ? 'border-black dark:border-white text-black dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
-        >
-          Automata Views
-        </a>
-        <a
-          href="#simulator-section"
-          className={`pb-2 border-b-2 transition-colors whitespace-nowrap ${activeSection === 'simulator-section' ? 'border-black dark:border-white text-black dark:text-white' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
-        >
-          Simulator
-        </a>
-      </nav>
+     
     </header>
   );
 }
