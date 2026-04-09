@@ -1,32 +1,18 @@
 import { Sun, Moon, Github } from 'lucide-react';
 
-const Logo = () => (
-  <svg
+/**
+ * Logo component that displays the appropriate logo based on theme
+ * Uses black logo for light mode and white logo for dark mode
+ */
+const Logo = ({ isDarkMode }: { isDarkMode: boolean }) => (
+  <img
+    src={isDarkMode ? '/logos/statera-white-logo.svg' : '/logos/statera-black-logo.svg'}
+    alt="Statera Logo"
     width="32"
     height="32"
-    viewBox="0 0 32 32"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
-    className="shrink-0"
-  >
-    <rect width="32" height="32" rx="8" fill="#000" />
-    <circle cx="10" cy="16" r="3" stroke="#fff" strokeWidth="2" />
-    <circle cx="22" cy="16" r="3" stroke="#fff" strokeWidth="2" />
-    <path d="M13 16H19" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-    <path
-      d="M22 16L19 13"
-      stroke="#fff"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-    <path
-      d="M22 16L19 19"
-      stroke="#fff"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
+    className="shrink-0 transition-opacity duration-200"
+  />
 );
 
 interface HeaderProps {
@@ -44,7 +30,7 @@ export function Header({
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10 transition-colors duration-200">
       <div className="px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Logo />
+          <Logo isDarkMode={isDarkMode} />
           <h1 className="text-xl font-semibold tracking-tight">Statera</h1>
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">

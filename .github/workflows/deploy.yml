@@ -1,20 +1,15 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Deploy on push to main branch
   push:
     branches: ['main']
-
-  # Allow manual deployment from Actions tab
   workflow_dispatch:
 
-# Grant permissions for GitHub Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Prevent concurrent deployments
 concurrency:
   group: 'pages'
   cancel-in-progress: true
@@ -27,11 +22,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      # Step 1: Checkout repository code
+      
       - name: Checkout
         uses: actions/checkout@v6
 
-      # Step 2: Set up Node.js with pnpm
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -43,25 +37,37 @@ jobs:
           node-version: lts/*
           cache: 'pnpm'
 
-      # Step 3: Install dependencies
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Step 4: Build the application
+      - name: Type check
+        run: pnpm run lint
+        continue-on-error: true
+
       - name: Build
         run: pnpm run build
+        env:
+          VITE_GITHUB_PAGES_URL: 'https://umairhex.github.io/statera'
 
-      # Step 5: Configure GitHub Pages
+      - name: Verify build artifacts
+        run: |
+          if [ ! -f "./dist/index.html" ]; then
+            echo "ERROR: dist/index.html not found"
+            exit 1
+          fi
+          echo "LOG: Build artifacts verified - index.html exists"
+          echo "LOG: Build output:"
+          du -sh ./dist
+          ls -la ./dist/
+
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v6
 
-      # Step 6: Upload build artifact
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: './dist'
 
-      # Step 7: Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
