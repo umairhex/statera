@@ -1,0 +1,5 @@
+{
+  "name": "Statera",
+  "description": "Generate, visualize, and simulate NFA and DFA from Regular Expressions. Fully responsive with an accessible Vercel-like design.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,27 @@
+# Artifacts
+build
+coverage
+dist
+node_modules
+
+# Dependencies
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Generated files
+.next
+.cache
+*.d.ts
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
