@@ -70,7 +70,15 @@ export default function App() {
     { string: string; accepted: boolean }[]
   >([]);
 
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+   
+    const saved = localStorage.getItem('statera-theme');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+   
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  });
   const [showCheatSheet, setShowCheatSheet] = useState(false);
   const [showDeadStates, setShowDeadStates] = useState(false);
   const [importedAutomaton, setImportedAutomaton] = useState<Automaton | null>(
@@ -80,11 +88,17 @@ export default function App() {
   const [isOperatorsExpanded, setIsOperatorsExpanded] = useState(false);
 
   useEffect(() => {
+   
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+   
+    localStorage.setItem('statera-theme', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
   useEffect(() => {

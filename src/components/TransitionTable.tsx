@@ -11,7 +11,7 @@ export function TransitionTable({ automaton }: { automaton: Automaton }) {
 
   return (
     <div
-      className="overflow-x-auto w-full h-full bg-white p-4"
+      className="overflow-x-auto w-full h-full bg-white dark:bg-gray-900 p-4"
       role="region"
       aria-label="State Transition Table Container"
       tabIndex={0}
@@ -23,11 +23,11 @@ export function TransitionTable({ automaton }: { automaton: Automaton }) {
         <caption className="sr-only">
           State Transition Table for the generated automaton
         </caption>
-        <thead className="bg-gray-100 text-gray-800">
+        <thead className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
           <tr>
             <th
               scope="col"
-              className="px-4 py-3 border border-gray-300 font-semibold"
+              className="px-4 py-3 border border-gray-300 dark:border-gray-700 font-semibold"
             >
               State
             </th>
@@ -35,7 +35,7 @@ export function TransitionTable({ automaton }: { automaton: Automaton }) {
               <th
                 scope="col"
                 key={sym}
-                className="px-4 py-3 border border-gray-300 font-semibold text-center"
+                className="px-4 py-3 border border-gray-300 dark:border-gray-700 font-semibold text-center"
               >
                 {sym}
               </th>
@@ -55,10 +55,10 @@ export function TransitionTable({ automaton }: { automaton: Automaton }) {
                     ? '* '
                     : '';
             return (
-              <tr key={state.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2 border border-gray-300 font-mono font-medium whitespace-nowrap text-gray-900">
+              <tr key={state.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                <td className="px-4 py-2 border border-gray-300 dark:border-gray-700 font-mono font-medium whitespace-nowrap text-gray-900 dark:text-gray-100">
                   <span
-                    className="text-gray-600 mr-2 w-6 inline-block text-right"
+                    className="text-gray-600 dark:text-gray-400 mr-2 w-6 inline-block text-right"
                     aria-hidden="true"
                   >
                     {prefix}
@@ -76,13 +76,13 @@ export function TransitionTable({ automaton }: { automaton: Automaton }) {
                   return (
                     <td
                       key={sym}
-                      className="px-4 py-2 border border-gray-300 font-mono text-center text-gray-800"
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-700 font-mono text-center text-gray-800 dark:text-gray-200"
                     >
                       {targets.length > 0 ? (
                         targets.join(', ')
                       ) : (
                         <span
-                          className="text-gray-400"
+                          className="text-gray-400 dark:text-gray-600"
                           aria-label="No transition"
                         >
                           -

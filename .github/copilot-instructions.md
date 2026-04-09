@@ -134,10 +134,10 @@ APP_URL=http://localhost:3000  # For AI Studio deployment
 
 1. **Always reset the global state counter** before building new NFA:
    ```ts
-   // Don't: State IDs will get very large
-   buildNFA(regex); buildNFA(regex2); // q0, q1... then q100, q101...
+  
+   buildNFA(regex); buildNFA(regex2);
    
-   // Do: Reset between builds if needed
+  
    resetStateCounter?.();
    buildNFA(regex);
    ```
@@ -152,9 +152,9 @@ APP_URL=http://localhost:3000  # For AI Studio deployment
 
 1. **Node layout via Dagre:**
    ```ts
-   const direction = 'LR'; // Left-to-Right
+   const direction = 'LR';
    const config = { nodesep: 60, ranksep: 100 };
-   // See GraphViewer.tsx for dagre usage
+  
    ```
 
 2. **Custom edge routing** handles:
@@ -203,7 +203,7 @@ console.log('Transitions:', nfa.transitions);
 **Test epsilon closure:**
 ```ts
 const closure = epsilonClosure(nfa, newSharedState);
-console.log('Epsilon closure:', closure); // Should be non-empty if epsilon transitions exist
+console.log('Epsilon closure:', closure);
 ```
 
 ## Deployment

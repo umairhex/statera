@@ -48,7 +48,8 @@ export function Header({
             )}
           </button>
           <a
-            href="#"
+            href="https://github.com/umairhex/statera"
+            target='_blank'
             className="hover:text-black dark:hover:text-white transition-colors flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none rounded-sm"
             aria-label="View on GitHub"
           >
